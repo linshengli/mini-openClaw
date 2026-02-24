@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "Avenir Next", system-ui, -apple-system, sans-serif;
+  color: #0d1b2a;
+  background:
+    radial-gradient(1300px 620px at -8% -22%, rgba(0, 51, 160, 0.09), transparent 62%),
+    radial-gradient(900px 520px at 112% 8%, rgba(255, 122, 24, 0.13), transparent 56%),
+    linear-gradient(140deg, #ffffff 0%, #f4f6f9 45%, #f9fafc 100%);
+}
+
+.frost-panel {
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(10, 18, 38, 0.09);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 12px 40px rgba(12, 23, 45, 0.08);
+  border-radius: 1.25rem;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: rgba(10, 18, 38, 0.22);
+  border-radius: 999px;
+}
+

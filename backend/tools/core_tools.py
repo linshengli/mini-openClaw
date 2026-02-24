@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import io
 import re
 import shlex
-import subprocess
-from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any
 
-import requests
+from langchain_community.tools import RequestsGetTool, ShellTool
+from langchain_community.tools.file_management import ReadFileTool
+from langchain_community.utilities.requests import TextRequestsWrapper
 from langchain_core.tools import tool
+from langchain_experimental.tools import PythonREPLTool
 
 from core.paths import KNOWLEDGE_DIR, STORAGE_DIR
 
@@ -22,56 +22,49 @@ def _resolve_in_root(root_dir: Path, relative_path: str) -> Path:
 
 
 def build_core_tools(root_dir: Path) -> list[Any]:
-    repl_locals: dict[str, Any] = {}
+    root_dir = root_dir.resolve()
     blocked_patterns = [
         r"rm\s+-rf\s+/",
         r":\(\)\s*\{\s*:\|:\s*&\s*\};:",
         r"mkfs",
         r"dd\s+if=",
     ]
+    shell_tool = ShellTool()
+    python_tool = PythonREPLTool()
+    fetch_raw_tool = RequestsGetTool(
+        name="fetch_url_raw",
+        requests_wrapper=TextRequestsWrapper(headers={"User-Agent": "mini-openclaw/1.0"}),
+        allow_dangerous_requests=True,
+    )
+    read_file_tool = ReadFileTool(root_dir=str(root_dir), name="read_file_raw")
 
     @tool("terminal")
     def terminal(command: str) -> str:
-        """Execute a shell command in a sandboxed root directory."""
+        """Execute a shell command in a sandboxed root directory using LangChain ShellTool."""
         for pattern in blocked_patterns:
             if re.search(pattern, command):
                 return "Blocked dangerous command by policy."
 
         try:
-            cmd = shlex.split(command)
-            proc = subprocess.run(
-                cmd,
-                cwd=root_dir,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
-            )
-            out = proc.stdout.strip()
-            err = proc.stderr.strip()
-            return f"exit={proc.returncode}\nstdout:\n{out}\nstderr:\n{err}".strip()
+            sandboxed = f"cd {shlex.quote(str(root_dir))} && {command}"
+            return str(shell_tool.run({"commands": sandboxed}))
         except Exception as exc:  # noqa: BLE001
             return f"terminal error: {exc}"
 
     @tool("python_repl")
     def python_repl(code: str) -> str:
-        """Run Python code and return stdout."""
-        buffer = io.StringIO()
+        """Run Python code in LangChain PythonREPLTool and return stdout."""
         try:
-            with redirect_stdout(buffer):
-                exec(code, repl_locals, repl_locals)
-            output = buffer.getvalue().strip()
-            return output or "ok"
+            output = python_tool.run(code)
+            return str(output).strip() or "ok"
         except Exception as exc:  # noqa: BLE001
             return f"python_repl error: {exc}"
 
     @tool("fetch_url")
     def fetch_url(url: str) -> str:
-        """Fetch URL content and return cleaned text."""
+        """Fetch URL with RequestsGetTool and return cleaned text."""
         try:
-            response = requests.get(url, timeout=20)
-            response.raise_for_status()
-            html = response.text
+            html = str(fetch_raw_tool.run(url))
             try:
                 from bs4 import BeautifulSoup
 
@@ -86,12 +79,14 @@ def build_core_tools(root_dir: Path) -> list[Any]:
 
     @tool("read_file")
     def read_file(path: str) -> str:
-        """Read a local file from project root."""
+        """Read a local file via LangChain ReadFileTool with project root sandbox."""
         try:
-            target = _resolve_in_root(root_dir, path.lstrip("./"))
+            normalized = path[2:] if path.startswith("./") else path
+            target = _resolve_in_root(root_dir, normalized)
             if not target.exists():
                 return "file not found"
-            return target.read_text(encoding="utf-8")[:20000]
+            output = read_file_tool.run({"file_path": str(target.relative_to(root_dir))})
+            return str(output)[:20000]
         except Exception as exc:  # noqa: BLE001
             return f"read_file error: {exc}"
 

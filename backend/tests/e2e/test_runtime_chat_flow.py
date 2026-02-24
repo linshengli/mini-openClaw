@@ -46,3 +46,27 @@ def test_runtime_raises_when_all_models_fail(tmp_path, monkeypatch) -> None:
     runtime = agent_runtime.MiniOpenClawRuntime(model="m1", fallback_models=["m2"], project_root=tmp_path)
     with pytest.raises(RuntimeError, match="all models failed"):
         runtime.chat_once("s2", "hello")
+
+
+def test_runtime_multi_turn_uses_history(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(sessions, "SESSIONS_DIR", tmp_path / "sessions")
+    monkeypatch.setattr(agent_runtime, "refresh_skills_snapshot", lambda: "<available_skills></available_skills>")
+    monkeypatch.setattr(agent_runtime, "build_system_prompt", lambda: "system")
+
+    seen_lengths: list[int] = []
+
+    class _EchoAgent:
+        def invoke(self, payload):
+            msgs = payload["messages"]
+            seen_lengths.append(len(msgs))
+            return {"messages": msgs + [{"role": "assistant", "content": f"turn-{len(seen_lengths)}"}]}
+
+    monkeypatch.setattr(agent_runtime, "create_agent", lambda **kwargs: _EchoAgent())
+    runtime = agent_runtime.MiniOpenClawRuntime(model="m1", fallback_models=[], project_root=tmp_path)
+
+    first = runtime.chat_once("multi", "hello")
+    second = runtime.chat_once("multi", "again")
+
+    assert first == "turn-1"
+    assert second == "turn-2"
+    assert seen_lengths == [1, 3]

@@ -41,7 +41,7 @@ ensure_scaffold()
 load_dotenv(BACKEND_DIR / ".env", override=True)
 default_models = os.getenv(
     "OPENCLAW_MODELS",
-    "openai:qwen3-coder-plus,openai:qwen-plus",
+    "openai:qwen-plus,openai:qwen3-coder-plus,",
 )
 parsed_models = [m.strip() for m in default_models.split(",") if m.strip()]
 primary_model = os.getenv("OPENCLAW_MODEL", parsed_models[0] if parsed_models else "openai:qwen3-coder-plus")

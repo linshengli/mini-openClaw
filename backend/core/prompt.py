@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.paths import MEMORY_FILE, WORKSPACE_DIR
+from core.paths import MEMORY_FILE, SKILLS_SNAPSHOT_FILE, WORKSPACE_DIR
 
 
 MAX_FILE_CHARS = 20_000
@@ -20,7 +20,7 @@ def _read_truncated(path: Path) -> str:
 def build_system_prompt() -> str:
     parts: list[str] = []
     ordered_files = [
-        WORKSPACE_DIR / "SKILLS_SNAPSHOT.md",
+        SKILLS_SNAPSHOT_FILE,
         WORKSPACE_DIR / "SOUL.md",
         WORKSPACE_DIR / "IDENTITY.md",
         WORKSPACE_DIR / "USER.md",

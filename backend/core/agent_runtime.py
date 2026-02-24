@@ -3,10 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from langchain.agents import create_agent
+from langchain_core.messages import AIMessage, HumanMessage
 
 from core.bootstrap import ensure_scaffold
 from core.prompt import build_system_prompt
-from core.sessions import load_session, save_session
+from core.sessions import load_session_messages, save_session_messages
 from core.skills import refresh_skills_snapshot
 from tools.core_tools import build_core_tools
 
@@ -46,17 +47,27 @@ class MiniOpenClawRuntime:
         return create_agent(model=model_name, tools=self.tools, system_prompt=system_prompt)
 
     def chat_once(self, session_id: str, message: str) -> str:
-        history = load_session(session_id)
-        input_messages = history + [{"role": "user", "content": message}]
+        history = load_session_messages(session_id)
+        input_messages = history + [HumanMessage(content=message)]
 
         models = [self.model] + [m for m in self.fallback_models if m and m != self.model]
         last_error: Exception | None = None
         assistant_text = ""
+        messages_for_save: list[Any] = []
         for model_name in models:
             try:
                 agent = self._build_agent(model_name)
                 result = agent.invoke({"messages": input_messages})
                 assistant_text = _extract_text(result)
+                if isinstance(result, dict) and isinstance(result.get("messages"), list):
+                    result_messages = result["messages"]
+                    messages_for_save = (
+                        input_messages + result_messages
+                        if len(result_messages) <= len(input_messages)
+                        else result_messages
+                    )
+                else:
+                    messages_for_save = input_messages + [AIMessage(content=assistant_text)]
                 break
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
@@ -67,6 +78,5 @@ class MiniOpenClawRuntime:
                 f"all models failed: {models}. last_error={last_error}"
             ) from last_error
 
-        updated = input_messages + [{"role": "assistant", "content": assistant_text}]
-        save_session(session_id, updated)
+        save_session_messages(session_id, messages_for_save)
         return assistant_text
